@@ -1,0 +1,43 @@
+{
+  "namespace": "de.unistuttgart.ipvs.dds.avro",
+  "type": "record",
+  "name": "TemperatureThresholdAggregate",
+  "doc": "Message sent when a the TemperatureThreshold stream processing job detects that a temperature value exceeds a certain threshold.",
+  "fields": [
+    {
+      "name": "is_exceeding",
+      "type": "boolean",
+      "doc": "Whether the value currently exceeds the threshold or not."
+    },
+    {
+      "name": "is_first",
+      "type": "boolean",
+      "doc": "Whether this is the first aggregate since a switch from not exceeding to exceeding or vice versa."
+    },
+    {
+      "name": "first_transgression",
+      "type": "long",
+      "doc": "The unix timestamp at which the threshold was first exceeded."
+    },
+    {
+      "name": "latest_transgression",
+      "type": "long",
+      "doc": "The unix timestamp at which the threshold was last exceeded."
+    },
+    {
+      "name": "latest_transgression_temperature",
+      "type": "double",
+      "doc": "The temperature at the latest transgression"
+    },
+    {
+      "name": "average_transgression_temperature",
+      "type": "double",
+      "doc": "The average temperature since exceeding the threshold."
+    },
+    {
+      "name": "max_transgression_temperature",
+      "type": "double",
+      "doc": "The maximum temperature since exceeding the threshold."
+    }
+  ]
+}
