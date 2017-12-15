@@ -1,6 +1,5 @@
 package de.unistuttgart.ipvs.dds;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
@@ -11,9 +10,7 @@ import de.unistuttgart.ipvs.dds.avro.TemperatureUnit;
 import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
@@ -64,6 +61,7 @@ public class TemperatureThreshold {
         final SpecificAvroSerde<TemperatureThresholdAggregate> thresholdAggregateSerde = createSerde(schemaRegistry);
         final SpecificAvroSerde<TemperatureThresholdExceeded> thresholdExceededSerde = createSerde(schemaRegistry);
 
+        // Create a factory for TemperatureThresholdAggregate Serde values.
         final TemperatureThresholdAggregate.Builder aggregateBuilder = TemperatureThresholdAggregate.newBuilder();
         aggregateBuilder.setIsExceeding(false);
         aggregateBuilder.setIsFirst(false);
@@ -75,6 +73,7 @@ public class TemperatureThreshold {
 
         final KStreamBuilder builder = new KStreamBuilder();
 
+        // Create a stream reading (String, TemperatureData) pairs from the `inputTopic`.
         final KStream<String, TemperatureData> input = builder.stream(
                 Serdes.String(),
                 temperatureDataSerde,
@@ -82,11 +81,17 @@ public class TemperatureThreshold {
         );
 
         input
+            // Convert temperature data to a single temperature unit.
             .mapValues(convertTo(temperatureUnit))
+            // Group the data by the sensor of origin.
             .groupByKey(Serdes.String(), temperatureDataSerde)
+            // Aggregate the values using the detectThreshold aggregator.
             .aggregate(aggregateBuilder::build, detectThreshold(threshold, hysteresis), thresholdAggregateSerde)
+            // Extract the changelog of the resulting Key-Value store.
             .toStream()
-            .filter((k, v) -> v.getIsFirst())
+            // Only process results during a temperature transgression and the first non-exceeding one.
+            .filter((k, v) -> v.getIsFirst() || v.getIsExceeding())
+            // Map the aggregate values to event values, stripping away values only required for aggregation.
             .mapValues(value -> new TemperatureThresholdExceeded(
                     value.getLatestTransgression(),
                     threshold,
@@ -94,6 +99,7 @@ public class TemperatureThreshold {
                     value.getMaxTransgressionTemperature(),
                     value.getLatestTransgression() - value.getFirstTransgression()
             ))
+            // Write events to the configured outputTopic.
             .to(Serdes.String(), thresholdExceededSerde, outputTopic);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
